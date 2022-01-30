@@ -1,26 +1,84 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
-import {Hero} from "./hero";
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { catchError, map, tap } from 'rxjs/operators';
+
+import { Hero } from "./hero";
 import { MessageService } from './message.service';
-import { HEROES } from './mock-heros';
 
 @Injectable({
   providedIn: 'root'
 })
 export class HeroService {
+  private heroesUrl = 'api/heroes';  // URL to web api
+  httpOptions = {
+    headers: new HttpHeaders({ 'Content-Type': 'application/json' })
+  };
 
-  constructor(private messageService: MessageService) { }
+  constructor(private messageService: MessageService,
+              private http: HttpClient) { }
 
-  getHeros(): Observable<Hero[]> {
-    return new Observable<Hero[]>((subscriber) => {
-      subscriber.next(HEROES);
-      subscriber.complete();
-      this.messageService.addMessage("Successfully fetched heroes!");
-    });
-    // Tutorial does the following which is way easier:
-    // import {of} from 'rxjs'
-    // const heroes = of(HEROES);
-    // return heroes;
+  getHeroes(): Observable<Hero[]> {
+    return this.http.get<Hero[]>(this.heroesUrl).pipe(
+      tap(_ => this.log('fetched heroes')),
+      catchError(this.handleError<Hero[]>('getHeroes', []))
+    );
   }
+
+  getHero(id: Number): Observable<Hero> {
+    return this.http.get<Hero>(`${this.heroesUrl}/${id}`).pipe(
+      tap(_ => this.log(`fetched hero with id=${id}`)),
+      catchError(this.handleError<Hero>(`getHero(${id})`)),
+    )
+  }
+
+  updateHero(hero: Hero): Observable<any> {
+    return this.http.put(this.heroesUrl, hero, this.httpOptions).pipe(
+      tap(_ => this.log(`updated hero with id=${hero.id}`)),
+      catchError(this.handleError<any>(`updateHero(${hero.id})`)),
+    );
+  }
+
+  addHero(hero: Hero): Observable<Hero> {
+    return this.http.post<Hero>(this.heroesUrl, hero, this.httpOptions).pipe(
+      tap((newHero: Hero) => this.log(`added hero with id=${newHero.id}`)),
+      catchError(this.handleError<any>(`addHero(${hero.id})`)),
+    );
+  }
+
+  deleteHero(id: Number): Observable<boolean> {
+    const url = `${this.heroesUrl}/${id}`;
+    return this.http.delete(url, this.httpOptions).pipe(
+      tap(_ => this.log(`deleted hero with id=${id}`)),
+      map(_ => { return true; }),
+      catchError(this.handleError<boolean>(`deleteHero(${id}`, false)),
+    );
+  }
+
+  /** Log a HeroService message with the MessageService */
+  private log(message: string) {
+    this.messageService.addMessage(`HeroService: ${message}`);
+  }
+
+/**
+ * Handle Http operation that failed.
+ * Let the app continue.
+ *
+ * @param operation - name of the operation that failed
+ * @param result - optional value to return as the observable result
+ */
+ private handleError<T>(operation = 'operation', result?: T) {
+  return (error: any): Observable<T> => {
+
+    // TODO: send the error to remote logging infrastructure
+    console.error(error); // log to console instead
+
+    // TODO: better job of transforming error for user consumption
+    this.log(`${operation} failed: ${error.message}`);
+
+    // Let the app keep running by returning an empty result.
+    return of(result as T);
+  };
+}
 }
